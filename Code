@@ -1,0 +1,51 @@
+// Load GAUL Level 2 FeatureCollection
+var gaulLevel2 = ee.FeatureCollection("FAO/GAUL/2015/level2");
+
+// Filter for the district named "Jhunjhunun"
+var jhunjhununFeature = gaulLevel2.filter(ee.Filter.eq('ADM2_NAME', 'Jhunjhunun'));
+
+// Get geometry
+var jhunjhununGeometry = jhunjhununFeature.geometry();
+
+// Print geometry to console
+print('Jhunjhunun Geometry:', jhunjhununGeometry);
+
+// Add the filtered feature to the map
+Map.addLayer(jhunjhununFeature, {color: 'red'}, 'Jhunjhunun District');
+Map.centerObject(jhunjhununFeature, 9);
+Map.addLayer(jhunjhununGeometry)
+
+var filtereds2 = s2.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30)) // Cloud filter
+.filter(ee.Filter.date('2023-01-01', '2024-01-01')) // Date range
+.filterBounds(jhunjhununGeometry)
+print(filtereds2.first());
+
+//Compute NDVI
+var calculateNdvi = function(image) {
+  var ndvi = image.normalizedDifference(['B8', 'B4'])
+  .rename('ndvi')
+  .toFloat();
+  return image.addBands(ndvi);
+};
+var withNdvi = filtereds2.map(calculateNdvi);
+
+var composite = withNdvi.median();
+var ndviVis = {
+  min: 0,
+  max: 0.7,
+  palette: ['#ffffe5','#f7fcb9','#d9f0a3','#addd8e','#78c679','#41ab5d','#238443','#005a32']
+};
+
+
+
+Map.addLayer(composite.clip(jhunjhununGeometry).select('ndvi'), ndviVis, 'NDVI Composite');
+Export.image.toDrive({
+  image: composite.toFloat(),
+  description: 'Jhunjhunun_NDVI_Composite',
+  folder: 'EarthEngineExports', // optional: your Drive folder
+  fileNamePrefix: 'NDVI_Jhunjhunun_2023',
+  region: jhunjhununGeometry,
+  scale: 10,  // Sentinel-2 resolution
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
